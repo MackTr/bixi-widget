@@ -9,8 +9,8 @@ struct StationSnapshot {
     let isPlaceholder: Bool
 
     static let placeholder = StationSnapshot(
-        stationName: "Drummond / de Maisonneuve",
-        bikes: 5, ebikes: 2, docks: 17,
+        stationName: "Regina / de Verdun",
+        bikes: 5, ebikes: 2, docks: 12,
         lastReported: .now, isPlaceholder: true
     )
 }
