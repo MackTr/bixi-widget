@@ -1,5 +1,8 @@
 # BIXI Station Widget
 
+<img width="1290" height="871" alt="image" src="https://github.com/user-attachments/assets/b6b4640e-7c3f-44ad-831d-7b858e10731c" />
+
+
 A personal iOS home-screen widget showing live BIXI (Montréal bike share) availability
 for one station, via the public GBFS feed (no API key).
 
