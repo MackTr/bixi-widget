@@ -51,24 +51,20 @@ struct BixiWidgetView: View {
         .containerBackground(.fill.tertiary, for: .widget)
     }
 
-    // MARK: - Small (one big bike count)
+    // MARK: - Small (three compact stats)
 
     private var smallLayout: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(entry.snapshot.stationName)
                 .font(.caption).bold().lineLimit(2)
 
             Spacer(minLength: 0)
 
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("🚲").font(.title2)
-                Text("\(entry.snapshot.bikes)")
-                    .font(.system(size: 46, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.green)
-                    .contentTransition(.numericText())
+            HStack(spacing: 6) {
+                stat("🚲", entry.snapshot.bikes, .green)
+                stat("⚡️", entry.snapshot.ebikes, .blue)
+                stat("🅿️", entry.snapshot.docks, .secondary)
             }
-            Text("bikes available")
-                .font(.caption2).foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
 
@@ -77,10 +73,10 @@ struct BixiWidgetView: View {
         .padding()
     }
 
-    // MARK: - Medium (big number + station + updated time)
+    // MARK: - Medium (three labeled cards)
 
     private var mediumLayout: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "bicycle")
                     .font(.subheadline)
@@ -97,23 +93,50 @@ struct BixiWidgetView: View {
                 }
             }
 
-            Spacer(minLength: 0)
-
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("\(entry.snapshot.bikes)")
-                    .font(.system(size: 58, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.green)
-                    .contentTransition(.numericText())
-                Text("bikes\navailable")
-                    .font(.title3).bold()
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                card("🚲", entry.snapshot.bikes, "Bikes", .green)
+                card("⚡️", entry.snapshot.ebikes, "Electric", .blue)
+                card("🅿️", entry.snapshot.docks, "Parking", .secondary)
             }
-
-            Spacer(minLength: 0)
 
             footer
         }
         .padding()
+    }
+
+    // MARK: - Pieces
+
+    /// Small-size stat: emoji over a shrink-to-fit number, evenly spaced.
+    private func stat(_ icon: String, _ n: Int, _ tint: some ShapeStyle) -> some View {
+        VStack(spacing: 1) {
+            Text(icon).font(.subheadline)
+            Text("\(n)")
+                .font(.system(.title3, design: .rounded)).bold()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Medium-size card: emoji, big shrink-to-fit number, and a label.
+    private func card(_ icon: String, _ n: Int, _ label: String, _ tint: some ShapeStyle) -> some View {
+        VStack(spacing: 2) {
+            Text(icon).font(.title3)
+            Text("\(n)")
+                .font(.system(.title, design: .rounded)).bold()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Shared footer
@@ -139,7 +162,7 @@ struct BixiWidget: Widget {
             BixiWidgetView(entry: entry)
         }
         .configurationDisplayName("BIXI Station")
-        .description("Live bikes available at your station.")
+        .description("Live bikes, e-bikes, and parking at your station.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
