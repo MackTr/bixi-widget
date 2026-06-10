@@ -51,31 +51,36 @@ struct BixiWidgetView: View {
         .containerBackground(.fill.tertiary, for: .widget)
     }
 
-    // MARK: - Small (compact, unchanged)
+    // MARK: - Small (one big bike count)
 
     private var smallLayout: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(entry.snapshot.stationName)
                 .font(.caption).bold().lineLimit(2)
-            HStack(spacing: 14) {
-                stat("🚲", entry.snapshot.bikes)
-                stat("⚡️", entry.snapshot.ebikes)
-                stat("🅿️", entry.snapshot.docks)
+
+            Spacer(minLength: 0)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("🚲").font(.title2)
+                Text("\(entry.snapshot.bikes)")
+                    .font(.system(size: 46, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.green)
+                    .contentTransition(.numericText())
             }
-            if let err = entry.errorText {
-                Text(err).font(.caption2).foregroundStyle(.secondary)
-            } else {
-                Text(entry.snapshot.lastReported, style: .time)
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
+            Text("bikes available")
+                .font(.caption2).foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            footer
         }
         .padding()
     }
 
-    // MARK: - Medium (uses the width: header + three labeled cards)
+    // MARK: - Medium (big number + station + updated time)
 
     private var mediumLayout: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "bicycle")
                     .font(.subheadline)
@@ -92,46 +97,38 @@ struct BixiWidgetView: View {
                 }
             }
 
-            HStack(spacing: 10) {
-                card("🚲", entry.snapshot.bikes, "Bikes", .green)
-                card("⚡️", entry.snapshot.ebikes, "E-bikes", .blue)
-                card("🅿️", entry.snapshot.docks, "Docks", .secondary)
+            Spacer(minLength: 0)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(entry.snapshot.bikes)")
+                    .font(.system(size: 58, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.green)
+                    .contentTransition(.numericText())
+                Text("bikes\navailable")
+                    .font(.title3).bold()
+                    .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "clock")
-                if let err = entry.errorText {
-                    Text(err)
-                } else {
-                    Text("Updated \(entry.snapshot.lastReported, style: .time)")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+
+            footer
         }
         .padding()
     }
 
-    // MARK: - Pieces
+    // MARK: - Shared footer
 
-    private func stat(_ icon: String, _ n: Int) -> some View {
-        VStack { Text(icon); Text("\(n)").font(.title3).bold() }
-    }
-
-    private func card(_ icon: String, _ n: Int, _ label: String, _ tint: some ShapeStyle) -> some View {
-        VStack(spacing: 2) {
-            Text(icon).font(.title3)
-            Text("\(n)")
-                .font(.system(.title, design: .rounded)).bold()
-                .foregroundStyle(tint)
-                .contentTransition(.numericText())
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private var footer: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "clock")
+            if let err = entry.errorText {
+                Text(err)
+            } else {
+                Text("Updated \(entry.snapshot.lastReported, style: .time)")
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
 }
 
@@ -142,7 +139,7 @@ struct BixiWidget: Widget {
             BixiWidgetView(entry: entry)
         }
         .configurationDisplayName("BIXI Station")
-        .description("Live bikes and docks at your station.")
+        .description("Live bikes available at your station.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
