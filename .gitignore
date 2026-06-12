@@ -5,6 +5,8 @@
 *.xcodeproj
 BixiWidgetApp/Info.plist
 BixiWidget/Info.plist
+BixiWidgetApp/BixiWidgetApp.entitlements
+BixiWidget/BixiWidget.entitlements
 
 # Xcode — user & build state
 xcuserdata/

@@ -1,10 +1,6 @@
 import WidgetKit
 import SwiftUI
 
-// 👉 CHANGE THIS to your station. Find the id in station_information.json
-//    (search the JSON for your station's "name", grab its "station_id").
-private let MY_STATION_ID = "345"   // "345" = Regina / de Verdun
-
 struct BixiEntry: TimelineEntry {
     let date: Date
     let snapshot: StationSnapshot
@@ -22,16 +18,34 @@ struct BixiProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<BixiEntry>) -> Void) {
         Task {
-            let entry: BixiEntry
-            do {
-                let snap = try await BixiAPI.snapshot(for: MY_STATION_ID)
-                entry = BixiEntry(date: .now, snapshot: snap, errorText: nil)
-            } catch {
-                entry = BixiEntry(date: .now, snapshot: .placeholder, errorText: "Couldn't load")
-            }
+            let entry = await Self.makeEntry()
             // Ask iOS to refresh ~15 min from now (its practical minimum).
             let next = Calendar.current.date(byAdding: .minute, value: 15, to: .now)!
             completion(Timeline(entries: [entry], policy: .after(next)))
+        }
+    }
+
+    /// Walks the home list (priority order, set in the app) and shows the
+    /// first station that still has a mechanical bike. If they're all empty,
+    /// shows the top-priority one with its zeros so the news is still visible.
+    static func makeEntry() async -> BixiEntry {
+        let home = StationConfig.load()?.home ?? []
+        let choices = home.isEmpty ? [StationConfig.fallbackStation] : home
+
+        do {
+            let statuses = try await BixiAPI.statuses(for: choices.map(\.id))
+            let pick = choices.first { (statuses[$0.id]?.mechanical ?? 0) > 0 } ?? choices[0]
+            guard let st = statuses[pick.id] else {
+                return BixiEntry(date: .now, snapshot: .placeholder, errorText: "Station missing from feed")
+            }
+            let snap = StationSnapshot(
+                stationName: pick.name,
+                bikes: st.bikes, ebikes: st.ebikes, docks: st.docks,
+                lastReported: st.lastReported, isPlaceholder: false
+            )
+            return BixiEntry(date: .now, snapshot: snap, errorText: nil)
+        } catch {
+            return BixiEntry(date: .now, snapshot: .placeholder, errorText: "Couldn't load")
         }
     }
 }
@@ -61,7 +75,7 @@ struct BixiWidgetView: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 6) {
-                stat("🚲", entry.snapshot.bikes, .green)
+                stat("🚲", entry.snapshot.mechanicalBikes, .green)
                 stat("⚡️", entry.snapshot.ebikes, .blue)
                 stat("🅿️", entry.snapshot.docks, .secondary)
             }
@@ -94,7 +108,7 @@ struct BixiWidgetView: View {
             }
 
             HStack(spacing: 10) {
-                card("🚲", entry.snapshot.bikes, "Bikes", .green)
+                card("🚲", entry.snapshot.mechanicalBikes, "Bikes", .green)
                 card("⚡️", entry.snapshot.ebikes, "Electric", .blue)
                 card("🅿️", entry.snapshot.docks, "Parking", .secondary)
             }

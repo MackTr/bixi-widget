@@ -11,7 +11,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
-    # DEVELOPMENT_TEAM: ""   # set in Xcode via Signing & Capabilities (your Apple ID)
+    DEVELOPMENT_TEAM: BM7H6MWUU5
 
 targets:
   # ---- Host app ----
@@ -24,6 +24,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macktr.BixiWidgetApp
+    entitlements:
+      path: BixiWidgetApp/BixiWidgetApp.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.macktr.BixiWidgetApp
     info:
       path: BixiWidgetApp/Info.plist
       properties:
@@ -43,6 +48,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macktr.BixiWidgetApp.BixiWidget
+    entitlements:
+      path: BixiWidget/BixiWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.macktr.BixiWidgetApp
     info:
       path: BixiWidget/Info.plist
       properties:
