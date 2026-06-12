@@ -58,5 +58,6 @@ targets:
       path: BixiWidget/Info.plist
       properties:
         CFBundleDisplayName: BixiWidget
+        NSWidgetWantsLocation: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

@@ -43,11 +43,16 @@ struct ContentView: View {
                         !config[kind].contains { $0.id == item.id }
                     }
                 ) { picked in
-                    config[kind].append(StationChoice(id: picked.id, name: picked.name))
+                    config[kind].append(StationChoice(id: picked.id, name: picked.name, lat: picked.lat, lon: picked.lon))
                     persist()
                 }
             }
-            .task { await loadDirectory() }
+            .task {
+                // Opening the app always nudges the widget to refresh, so a
+                // new build or config never leaves it showing a stale layout.
+                WidgetCenter.shared.reloadAllTimelines()
+                await loadDirectory()
+            }
         }
     }
 
@@ -96,9 +101,25 @@ struct ContentView: View {
             allStations = try await BixiAPI.allStations()
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             directoryFailed = false
+            backfillCoordinates()
         } catch {
             directoryFailed = true
         }
+    }
+
+    /// Picks saved before coordinates existed get them filled in from the
+    /// directory, so the widget's home/work switching can measure distance.
+    private func backfillCoordinates() {
+        var changed = false
+        for kind in StationListKind.allCases {
+            config[kind] = config[kind].map { choice in
+                guard choice.lat == nil,
+                      let match = allStations.first(where: { $0.id == choice.id }) else { return choice }
+                changed = true
+                return StationChoice(id: choice.id, name: choice.name, lat: match.lat, lon: match.lon)
+            }
+        }
+        if changed { persist() }
     }
 }
 
