@@ -35,6 +35,7 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        NSLocationWhenInUseUsageDescription: Shows your position on the station map and, later, picks stations near you.
     dependencies:
       - target: BixiWidget
 

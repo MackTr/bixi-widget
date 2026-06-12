@@ -19,6 +19,8 @@ struct StationStatus {
 struct StationListItem: Identifiable, Equatable {
     let id: String          // GBFS station_id
     let name: String
+    let lat: Double
+    let lon: Double
 }
 
 // MARK: - Service
@@ -62,12 +64,14 @@ enum BixiAPI {
     }
 
     /// Full station directory for the in-app picker (app side, not the widget).
+    /// Keeps only stations named as a two-street intersection ("X / Y") —
+    /// this also drops the feed's junk entries like "6037_SWAP".
     static func allStations() async throws -> [StationListItem] {
         let decoder = JSONDecoder()   // no target set = keep every row
         let rows = try decoder.decode(StationFeed<InfoRow>.self, from: await fetch(infoURL)).matches
         return rows
-            .filter { !$0.station_id.isEmpty && !$0.name.isEmpty }
-            .map { StationListItem(id: $0.station_id, name: $0.name) }
+            .filter { !$0.station_id.isEmpty && $0.name.contains("/") && $0.lat != 0 && $0.lon != 0 }
+            .map { StationListItem(id: $0.station_id, name: $0.name, lat: $0.lat, lon: $0.lon) }
     }
 
     private static func fetch(_ url: URL) async throws -> Data {
@@ -148,11 +152,15 @@ private struct StatusRow: StationRow {
 private struct InfoRow: StationRow {
     let station_id: String
     let name: String
+    let lat: Double
+    let lon: Double
 
-    private enum K: String, CodingKey { case station_id, name }
+    private enum K: String, CodingKey { case station_id, name, lat, lon }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
         station_id = (try? c.decode(String.self, forKey: .station_id)) ?? ""
         name       = (try? c.decode(String.self, forKey: .name)) ?? ""
+        lat        = (try? c.decode(Double.self, forKey: .lat)) ?? 0
+        lon        = (try? c.decode(Double.self, forKey: .lon)) ?? 0
     }
 }
