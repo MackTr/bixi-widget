@@ -5,14 +5,14 @@ import Foundation
 /// Live numbers for one station, straight from the status feed.
 struct StationStatus {
     let stationID: String
-    let bikes: Int          // total bikes (the feed includes e-bikes in this)
+    let bikes: Int          // total bikes (the feed includes e-bikes AND cargo in this)
     let ebikes: Int
+    let cargo: Int          // human-powered cargo/trailer bikes (excluded from `mechanical`)
     let docks: Int
     let lastReported: Date
 
-    /// Non-electric bikes. The public feed can't isolate cargo/trailer bikes,
-    /// so this lumps mechanical + trailer together (= total − electric).
-    var mechanical: Int { max(0, bikes - ebikes) }
+    /// Regular pedal bikes: total minus electric minus cargo/trailer.
+    var mechanical: Int { max(0, bikes - ebikes - cargo) }
 }
 
 /// Directory entry for the in-app station picker.
@@ -26,8 +26,11 @@ struct StationListItem: Identifiable, Equatable {
 // MARK: - Service
 
 enum BixiAPI {
-    static let statusURL = URL(string: "https://gbfs.velobixi.com/gbfs/en/station_status.json")!
-    static let infoURL   = URL(string: "https://gbfs.velobixi.com/gbfs/en/station_information.json")!
+    // Versioned 2-2 feed: richer than the plain feed — breaks availability down
+    // by vehicle type, which is what lets us separate cargo/trailer bikes out.
+    static let statusURL       = URL(string: "https://gbfs.velobixi.com/gbfs/2-2/en/station_status.json")!
+    static let infoURL         = URL(string: "https://gbfs.velobixi.com/gbfs/2-2/en/station_information.json")!
+    static let vehicleTypesURL = URL(string: "https://gbfs.velobixi.com/gbfs/2-2/en/vehicle_types.json")!
 
     /// One pass over the city-wide status feed, returning the rows for `ids`.
     ///
@@ -36,19 +39,39 @@ enum BixiAPI {
     /// stream-decode: keep the rows we were asked for, discard everything else
     /// as we walk the array, and stop as soon as all targets are found.
     static func statuses(for ids: [String]) async throws -> [String: StationStatus] {
+        // Which vehicle-type ids are cargo/trailer (tiny fetch, done first).
+        let cargoIDs = await cargoTypeIDs()
+
         let decoder = JSONDecoder()
         decoder.userInfo[.targetStationIDs] = Set(ids)
         let rows = try decoder.decode(StationFeed<StatusRow>.self, from: await fetch(statusURL)).matches
         let statuses = rows.map { row in
-            StationStatus(
+            let cargo = row.vehicle_types_available
+                .filter { cargoIDs.contains($0.vehicle_type_id) }
+                .reduce(0) { $0 + $1.count }
+            return StationStatus(
                 stationID: row.station_id,
                 bikes: row.num_bikes_available,
                 ebikes: row.num_ebikes_available,
+                cargo: cargo,
                 docks: row.num_docks_available,
                 lastReported: Date(timeIntervalSince1970: TimeInterval(row.last_reported))
             )
         }
         return Dictionary(statuses.map { ($0.stationID, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// vehicle_type_ids whose form factor is a cargo bicycle (trailer). Tiny
+    /// feed. Any failure returns an empty set — cargo then counts as 0, i.e.
+    /// the widget degrades to the pre-2-2 behaviour instead of breaking.
+    static func cargoTypeIDs() async -> Set<String> {
+        guard let data = try? await fetch(vehicleTypesURL),
+              let feed = try? JSONDecoder().decode(VehicleTypesFeed.self, from: data) else {
+            return []
+        }
+        return Set(feed.data.vehicle_types
+            .filter { $0.form_factor == "cargo_bicycle" }
+            .map(\.vehicle_type_id))
     }
 
     /// Single-station convenience used by the widget's pre-config fallback.
@@ -58,7 +81,7 @@ enum BixiAPI {
         }
         return StationSnapshot(
             stationName: "Station \(stationId)",
-            bikes: st.bikes, ebikes: st.ebikes, docks: st.docks,
+            bikes: st.bikes, ebikes: st.ebikes, cargo: st.cargo, docks: st.docks,
             lastReported: st.lastReported, isPlaceholder: false
         )
     }
@@ -129,23 +152,56 @@ private struct StationFeed<Row: StationRow>: Decodable {
 
 /// Field-by-field optional decoding: a single bad/missing field in one station
 /// can't blow up the decode of the whole feed and hide the stations we want.
+struct VTCount: Decodable {
+    let vehicle_type_id: String
+    let count: Int
+
+    private enum K: String, CodingKey { case vehicle_type_id, count }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: K.self)
+        vehicle_type_id = (try? c.decode(String.self, forKey: .vehicle_type_id)) ?? ""
+        count           = (try? c.decode(Int.self, forKey: .count)) ?? 0
+    }
+}
+
 private struct StatusRow: StationRow {
     let station_id: String
     let num_bikes_available: Int
     let num_ebikes_available: Int
     let num_docks_available: Int
     let last_reported: Int
+    let vehicle_types_available: [VTCount]
 
     private enum K: String, CodingKey {
-        case station_id, num_bikes_available, num_ebikes_available, num_docks_available, last_reported
+        case station_id, num_bikes_available, num_ebikes_available, num_docks_available,
+             last_reported, vehicle_types_available
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
-        station_id           = (try? c.decode(String.self, forKey: .station_id)) ?? ""
-        num_bikes_available  = (try? c.decode(Int.self, forKey: .num_bikes_available)) ?? 0
-        num_ebikes_available = (try? c.decode(Int.self, forKey: .num_ebikes_available)) ?? 0
-        num_docks_available  = (try? c.decode(Int.self, forKey: .num_docks_available)) ?? 0
-        last_reported        = (try? c.decode(Int.self, forKey: .last_reported)) ?? 0
+        station_id              = (try? c.decode(String.self, forKey: .station_id)) ?? ""
+        num_bikes_available     = (try? c.decode(Int.self, forKey: .num_bikes_available)) ?? 0
+        num_ebikes_available    = (try? c.decode(Int.self, forKey: .num_ebikes_available)) ?? 0
+        num_docks_available     = (try? c.decode(Int.self, forKey: .num_docks_available)) ?? 0
+        last_reported           = (try? c.decode(Int.self, forKey: .last_reported)) ?? 0
+        vehicle_types_available = (try? c.decode([VTCount].self, forKey: .vehicle_types_available)) ?? []
+    }
+}
+
+// MARK: - vehicle_types.json
+
+private struct VehicleTypesFeed: Decodable {
+    let data: DataWrapper
+    struct DataWrapper: Decodable { let vehicle_types: [VehicleType] }
+    struct VehicleType: Decodable {
+        let vehicle_type_id: String
+        let form_factor: String
+
+        private enum K: String, CodingKey { case vehicle_type_id, form_factor }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: K.self)
+            vehicle_type_id = (try? c.decode(String.self, forKey: .vehicle_type_id)) ?? ""
+            form_factor     = (try? c.decode(String.self, forKey: .form_factor)) ?? ""
+        }
     }
 }
 

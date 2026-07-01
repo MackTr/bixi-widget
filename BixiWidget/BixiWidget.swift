@@ -7,6 +7,9 @@ struct BixiEntry: TimelineEntry {
     let snapshot: StationSnapshot
     let errorText: String?
     var list: WidgetList? = nil   // which station list is showing (🏠/💼 badge)
+    // Names of closer stations skipped because they had no mechanical bike.
+    // Empty unless this is a fallback; rank shown = skipped.count + 1.
+    var skipped: [String] = []
 }
 
 /// One cheap location fix for the timeline refresh. Battery-friendly by
@@ -100,16 +103,23 @@ struct BixiProvider: TimelineProvider {
 
         do {
             let statuses = try await BixiAPI.statuses(for: choices.map(\.id))
-            let pick = choices.first { (statuses[$0.id]?.mechanical ?? 0) > 0 } ?? choices[0]
+            // First station with a mechanical bike; if none, fall back to the
+            // closest (#1) and treat it as "not a fallback" (its zeros tell the
+            // story, and nothing closer would have been better).
+            let hit = choices.firstIndex { (statuses[$0.id]?.mechanical ?? 0) > 0 }
+            let pickIndex = hit ?? 0
+            let pick = choices[pickIndex]
+            let skipped = hit != nil ? choices[0..<pickIndex].map(\.name) : []
+
             guard let st = statuses[pick.id] else {
-                return BixiEntry(date: .now, snapshot: .placeholder, errorText: "Station missing from feed")
+                return BixiEntry(date: .now, snapshot: .placeholder, errorText: "Station missing from feed", list: list)
             }
             let snap = StationSnapshot(
                 stationName: pick.name,
-                bikes: st.bikes, ebikes: st.ebikes, docks: st.docks,
+                bikes: st.bikes, ebikes: st.ebikes, cargo: st.cargo, docks: st.docks,
                 lastReported: st.lastReported, isPlaceholder: false
             )
-            return BixiEntry(date: .now, snapshot: snap, errorText: nil, list: list)
+            return BixiEntry(date: .now, snapshot: snap, errorText: nil, list: list, skipped: skipped)
         } catch {
             return BixiEntry(date: .now, snapshot: .placeholder, errorText: "Couldn't load", list: list)
         }
@@ -142,8 +152,26 @@ struct BixiWidgetView: View {
         }
     }
 
+    // MARK: - Fallback signalling
+
+    /// True when a closer station was empty and we're showing a further one.
+    private var isFallback: Bool { !entry.skipped.isEmpty }
+
+    private func ordinal(_ n: Int) -> String {
+        switch n {
+        case 2: "2nd"
+        case 3: "3rd"
+        default: "\(n)th"
+        }
+    }
+
+    /// "2nd closest station" — rank of the station actually shown.
+    private var fallbackRankText: String {
+        "\(ordinal(entry.skipped.count + 1)) closest station"
+    }
+
     private var smallLayout: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 if let icon = listIcon {
                     Image(systemName: icon)
@@ -239,15 +267,21 @@ struct BixiWidgetView: View {
 
     private var footer: some View {
         HStack(spacing: 4) {
-            Image(systemName: "clock")
-            if let err = entry.errorText {
+            if isFallback {
+                Image(systemName: "arrow.turn.down.right")
+                Text(fallbackRankText)
+            } else if let err = entry.errorText {
+                Image(systemName: "exclamationmark.triangle")
                 Text(err)
             } else {
+                Image(systemName: "clock")
                 Text("Updated \(entry.snapshot.lastReported, style: .time)")
             }
         }
         .font(.caption2)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(isFallback ? Color.orange : Color.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
     }
 }
 
@@ -275,4 +309,18 @@ struct BixiWidget: Widget {
     BixiWidget()
 } timeline: {
     BixiEntry(date: .now, snapshot: .placeholder, errorText: nil, list: .work)
+}
+
+#Preview("Small fallback", as: .systemSmall) {
+    BixiWidget()
+} timeline: {
+    BixiEntry(date: .now, snapshot: .placeholder, errorText: nil, list: .home,
+              skipped: ["Regina / de Verdun"])
+}
+
+#Preview("Medium fallback", as: .systemMedium) {
+    BixiWidget()
+} timeline: {
+    BixiEntry(date: .now, snapshot: .placeholder, errorText: nil, list: .home,
+              skipped: ["Regina / de Verdun"])
 }
