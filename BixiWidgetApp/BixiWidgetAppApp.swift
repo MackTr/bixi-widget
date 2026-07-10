@@ -4,7 +4,7 @@ import SwiftUI
 struct BixiWidgetAppApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()
         }
     }
 }

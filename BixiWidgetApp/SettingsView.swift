@@ -16,7 +16,7 @@ private extension StationConfig {
     }
 }
 
-struct ContentView: View {
+struct SettingsView: View {
     @State private var config = StationConfig.load() ?? .empty
     @State private var allStations: [StationListItem] = []
     @State private var directoryFailed = false
@@ -307,5 +307,5 @@ private extension MKCoordinateRegion {
 }
 
 #Preview {
-    ContentView()
+    SettingsView()
 }
